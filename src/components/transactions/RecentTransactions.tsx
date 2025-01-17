@@ -2,12 +2,21 @@ import React from 'react';
 import { ExternalLink, History, ArrowUpRight, ArrowDownLeft, RefreshCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+interface Transaction {
+    signature: string;
+    type: 'receive' | 'send';
+    confirmationStatus: string;
+    blockTime?: number;
+    amount?: number;
+}
+
 interface TransactionsProps {
-    transactions: any[];
+    transactions: Transaction[];
     isLoading: boolean;
     walletAddress: string;
     onRefresh?: () => void;
 }
+
 
 export const RecentTransactions = ({
                                        transactions,

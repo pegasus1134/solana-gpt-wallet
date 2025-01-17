@@ -1,8 +1,17 @@
 {
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build --no-lint",
-    "start": "next start",
-    "lint": "next lint"
+  "extends": "next/core-web-vitals",
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "root": true,
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-empty-interface": "off",
+    "@typescript-eslint/no-unused-vars": ["error", {
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_",
+      "ignoreRestSiblings": true
+    }],
+    "@typescript-eslint/no-unused-expressions": "off",
+    "no-unused-vars": "off"
   }
 }

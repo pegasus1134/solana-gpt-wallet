@@ -1,5 +1,11 @@
-export const handleSolanaError = (error: any) => {
-    const errorMessage = error?.message || 'Unknown error occurred';
+interface ErrorResponse {
+    error: boolean;
+    message: string;
+    type: string;
+}
+
+export const handleSolanaError = (error: unknown): ErrorResponse => {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
     // User rejection cases
     if (errorMessage.includes('rejected') ||
