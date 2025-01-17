@@ -65,7 +65,7 @@ npm run dev
 ## 🔧 Customization
 
 Feel free to experiment with:
-- Different GPT models (currently using GPT-4-mini)
+- Different GPT models (currently using GPT-4o-mini)
 - Custom system prompts for better interactions
 - Alternative wallet providers
 - Additional token support
@@ -75,7 +75,7 @@ Feel free to experiment with:
 - **Frontend**: Next.js, React, TypeScript
 - **Styling**: Tailwind CSS, Shadcn UI
 - **Blockchain**: Solana Web3.js
-- **AI Integration**: OpenAI GPT-4-mini
+- **AI Integration**: OpenAI GPT-4o-mini
 - **State Management**: Zustand
 
 ## 🤝 Contributing
