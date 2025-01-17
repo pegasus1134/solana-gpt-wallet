@@ -466,22 +466,22 @@ const WalletDashboard: React.FC = () => {
     // ----------------------------------------------------------------
     if (!publicKey) {
         return (
-            <div className="relative min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+            <div className="relative min-h-screen bg-gradient-to-b from-black via-gray-900 to-black flex items-center justify-center">
                 <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-[300px] h-[300px] bg-purple-500/10 rounded-full animate-pulse" />
-                    <div className="absolute w-[500px] h-[500px] bg-pink-500/5 rounded-full animate-pulse delay-75" />
+                    <div className="w-[300px] h-[300px] bg-cyan-500/5 rounded-full animate-pulse" />
+                    <div className="absolute w-[500px] h-[500px] bg-cyan-500/5 rounded-full animate-pulse delay-75" />
                 </div>
 
                 <div className="relative z-10 text-center space-y-8 p-8 backdrop-blur-xl bg-black/30 rounded-2xl border border-gray-800 shadow-2xl max-w-lg mx-4">
                     <div className="flex justify-center">
-                        <div className="p-3 rounded-full bg-purple-500/10 border border-purple-500/20 animate-bounce">
-                            <Wallet className="w-12 h-12 text-purple-400" />
+                        <div className="p-3 rounded-full bg-cyan-500/10 border border-cyan-500/20 animate-bounce">
+                            <Wallet className="w-12 h-12 text-cyan-400" />
                         </div>
                     </div>
 
                     <div className="space-y-4">
-                        <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
+                        <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400">
                             Welcome to Solana GPT Wallet
                         </h1>
                         <p className="text-gray-400 max-w-sm mx-auto">
@@ -490,8 +490,8 @@ const WalletDashboard: React.FC = () => {
                     </div>
 
                     <div className="space-y-4">
-                        <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20 backdrop-blur-sm">
-                            <div className="mb-3 text-sm text-purple-300 font-medium">
+                        <div className="p-4 rounded-lg bg-cyan-500/5 border border-cyan-500/20 backdrop-blur-sm">
+                            <div className="mb-3 text-sm text-cyan-300 font-medium">
                                 Connect Wallet to Start
                             </div>
                             <div className="welcome-wallet-button">
@@ -503,7 +503,7 @@ const WalletDashboard: React.FC = () => {
                                 <Zap className="w-4 h-4" />
                                 <span>Powered by Solana & GPT</span>
                             </div>
-                            <div className="px-4 py-2 rounded-lg bg-purple-500/5 border border-purple-500/5">
+                            <div className="px-4 py-2 rounded-lg bg-cyan-500/5 border border-cyan-500/5">
                                 ⚠️ Running on Devnet - Perfect for testing!
                             </div>
                         </div>
@@ -517,17 +517,16 @@ const WalletDashboard: React.FC = () => {
     // Render: Main Dashboard
     // ----------------------------------------------------------------
     return (
-        <div className="relative min-h-screen bg-gradient-to-b from-gray-900 via-purple-900 to-gray-900">
+        <div className="relative min-h-screen bg-gradient-to-b from-black via-gray-900 to-black">
             <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
 
             <div className="relative w-full max-w-4xl mx-auto p-4 pt-20">
                 <div className="backdrop-blur-xl bg-black/30 rounded-2xl border border-gray-800 shadow-2xl p-8">
-
                     {/* Header */}
                     <div className="flex justify-between items-center mb-8">
                         <div className="flex items-center gap-3">
-                            <Wallet className="w-8 h-8 text-purple-400" />
-                            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">
+                            <Wallet className="w-8 h-8 text-cyan-400" />
+                            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400">
                                 Solana GPT Wallet
                             </h1>
                         </div>
@@ -536,7 +535,7 @@ const WalletDashboard: React.FC = () => {
                                 variant="outline"
                                 onClick={requestAirdrop}
                                 disabled={airdropInProgress}
-                                className="bg-white/5 hover:bg-white/10 border-white/10 text-white min-w-[160px] font-medium"
+                                className="bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20 text-white min-w-[160px] font-medium"
                             >
                                 {airdropInProgress ? (
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -572,8 +571,8 @@ const WalletDashboard: React.FC = () => {
                         </div>
                     )}
 
-                    {/* Balance Card - Updated for multiple currencies */}
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 p-8 mb-8">
+                    {/* Balance Card */}
+                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-black to-gray-900 p-8 mb-8">
                         <div className="absolute inset-0 bg-grid-white/10 pointer-events-none" />
                         <div className={`transition-all duration-1000 transform ${showBalance ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
                             <div className="flex justify-between items-start">
@@ -587,7 +586,7 @@ const WalletDashboard: React.FC = () => {
                                                 updateBalance();
                                                 updateUsdcBalance();
                                             }}
-                                            className="text-purple-400 hover:text-purple-300 hover:bg-purple-500/20"
+                                            className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
                                         >
                                             <RefreshCcw className="w-4 h-4" />
                                         </Button>
@@ -596,7 +595,7 @@ const WalletDashboard: React.FC = () => {
                                     {/* Currency Grid */}
                                     <div className="grid gap-4">
                                         {/* SOL Balance */}
-                                        <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+                                        <div className="p-4 rounded-lg bg-black/40 border border-gray-800/50">
                                             <div className="flex justify-between items-center">
                                                 <div>
                                                     <p className="text-sm text-gray-400 mb-1">SOL</p>
@@ -611,7 +610,7 @@ const WalletDashboard: React.FC = () => {
                                         </div>
 
                                         {/* USDC Balance */}
-                                        <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+                                        <div className="p-4 rounded-lg bg-black/40 border border-gray-800/50">
                                             <div className="flex justify-between items-center">
                                                 <div>
                                                     <p className="text-sm text-gray-400 mb-1">USDC</p>
@@ -629,13 +628,13 @@ const WalletDashboard: React.FC = () => {
                                     {/* Wallet Address */}
                                     <div className="mt-6">
                                         <div className="flex items-center gap-2">
-                                            <p className="text-sm font-medium text-gray-500 bg-white/5 px-2 py-1 rounded-md border border-gray-800">
+                                            <p className="text-sm font-medium text-gray-500 bg-black/40 px-2 py-1 rounded-md border border-gray-800">
                                                 {formatAddress(publicKey.toString())}
                                             </p>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7 bg-white/5 hover:bg-white/10"
+                                                className="h-7 w-7 bg-black/40 hover:bg-gray-800/40"
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(publicKey.toString());
                                                     setResponse('Address copied to clipboard!');
@@ -651,7 +650,7 @@ const WalletDashboard: React.FC = () => {
                                         <Button
                                             variant="outline"
                                             onClick={() => setInput('send')}
-                                            className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                                            className="flex-1 flex items-center justify-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20 text-white"
                                         >
                                             <ArrowUpRight className="w-4 h-4" />
                                             Send
@@ -659,7 +658,7 @@ const WalletDashboard: React.FC = () => {
                                         <Button
                                             variant="outline"
                                             onClick={() => setInput('swap')}
-                                            className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                                            className="flex-1 flex items-center justify-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20 text-white"
                                         >
                                             <RefreshCcw className="w-4 h-4" />
                                             Swap
@@ -670,7 +669,7 @@ const WalletDashboard: React.FC = () => {
                                                 navigator.clipboard.writeText(publicKey.toString());
                                                 setResponse('Address copied! Share this to receive tokens.');
                                             }}
-                                            className="flex-1 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border-white/10 text-white"
+                                            className="flex-1 flex items-center justify-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/20 text-white"
                                         >
                                             <ArrowDownLeft className="w-4 h-4" />
                                             Receive
@@ -693,7 +692,7 @@ const WalletDashboard: React.FC = () => {
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 placeholder="e.g. 'Send 0.1 SOL to ...', 'Swap 0.5 SOL to USDC', 'Check my balance', 'Show recent transactions'"
-                                className="bg-white/5 border-gray-800 text-white placeholder:text-gray-500"
+                                className="bg-black/40 border-gray-800 text-white placeholder:text-gray-500"
                                 disabled={processing || transactionInProgress}
                             />
                             <Button
@@ -701,7 +700,7 @@ const WalletDashboard: React.FC = () => {
                                 variant="ghost"
                                 size="icon"
                                 disabled={processing || !input.trim() || transactionInProgress}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-400 hover:text-purple-300 hover:bg-purple-500/20"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
                             >
                                 {processing ? (
                                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -713,12 +712,12 @@ const WalletDashboard: React.FC = () => {
 
                         {/* GPT/AI Response */}
                         {(response || isTyping) && (
-                            <div className="mt-4 p-4 rounded-lg bg-white/5 border border-gray-800">
+                            <div className="mt-4 p-4 rounded-lg bg-black/40 border border-gray-800">
                                 {isTyping ? (
                                     <div className="flex gap-1">
-                                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" />
-                                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:0.2s]" />
-                                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:0.4s]" />
+                                        <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" />
+                                        <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.2s]" />
+                                        <div className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce [animation-delay:0.4s]" />
                                     </div>
                                 ) : (
                                     <p className="text-gray-300">{response}</p>
@@ -728,7 +727,7 @@ const WalletDashboard: React.FC = () => {
 
                         {/* Confirm SEND */}
                         {pendingTransaction && pendingTransaction.action === 'send' && (
-                            <div className="mt-4 p-4 rounded-lg bg-white/5 border border-yellow-500/50">
+                            <div className="mt-4 p-4 rounded-lg bg-black/40 border border-yellow-500/50">
                                 <div className="flex items-start gap-3">
                                     <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5" />
                                     <div className="space-y-2 flex-1">
@@ -749,8 +748,7 @@ const WalletDashboard: React.FC = () => {
                                                 </span>
                                             </p>
                                             <p className="text-yellow-500/80 text-xs mt-2">
-                                                ⚠️ Please verify the address. Transactions cannot be
-                                                reversed.
+                                                ⚠️ Please verify the address. Transactions cannot be reversed.
                                             </p>
                                         </div>
                                         <div className="flex gap-2 mt-4">
@@ -786,7 +784,7 @@ const WalletDashboard: React.FC = () => {
 
                         {/* Confirm SWAP */}
                         {pendingTransaction && pendingTransaction.action === 'swap' && (
-                            <div className="mt-4 p-4 rounded-lg bg-white/5 border border-yellow-500/50">
+                            <div className="mt-4 p-4 rounded-lg bg-black/40 border border-yellow-500/50">
                                 <div className="flex items-start gap-3">
                                     <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5" />
                                     <div className="space-y-2 flex-1">
@@ -859,7 +857,7 @@ const WalletDashboard: React.FC = () => {
                             href={getExplorerUrl(`/account/${publicKey?.toString()}`)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center gap-1 hover:text-purple-400 transition-colors"
+                            className="flex items-center gap-1 hover:text-cyan-400 transition-colors"
                         >
                             <ExternalLink className="w-3 h-3" />
                             View in Explorer
@@ -871,7 +869,7 @@ const WalletDashboard: React.FC = () => {
                                     setResponse('Address copied to clipboard!');
                                 }
                             }}
-                            className="flex items-center gap-1 hover:text-purple-400 transition-colors"
+                            className="flex items-center gap-1 hover:text-cyan-400 transition-colors"
                         >
                             <Copy className="w-3 h-3" />
                             Copy Address

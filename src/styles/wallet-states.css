@@ -1,36 +1,22 @@
-/* Wallet states container */
-.wallet-state-container {
-    padding: 0.5rem;
-    border-radius: 0.5rem;
-    background-color: rgb(255 255 255 / 0.05);
-    border: 1px solid rgb(255 255 255 / 0.1);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Status indicator */
-.wallet-status {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 9999px;
-}
-
-.wallet-status-connected {
-    background-color: rgb(34 197 94); /* green-500 */
-    box-shadow: 0 0 12px rgb(34 197 94 / 0.5);
-}
-
-.wallet-status-connecting {
-    background-color: rgb(234 179 8); /* yellow-500 */
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        opacity: 1;
+@layer components {
+    .wallet-state-container {
+        @apply p-2 rounded-lg bg-white/5 border border-white/10 flex items-center gap-2;
     }
-    50% {
-        opacity: 0.5;
+
+    .wallet-status {
+        @apply w-2 h-2 rounded-full;
+    }
+
+    .wallet-status-connected {
+        @apply bg-green-500;
+        box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+    }
+
+    .wallet-status-connecting {
+        @apply bg-yellow-500 animate-pulse;
     }
 }

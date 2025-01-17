@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Solana GPT Wallet
 
-## Getting Started
+A modern, AI-powered wallet interface for Solana that allows users to interact with their crypto assets using natural language. Built with Next.js, Tailwind CSS, and integrated with GPT for an intuitive user experience.
 
-First, run the development server:
+🔗 **Live Demo**: [https://solana-gpt-wallet.vercel.app/](https://solana-gpt-wallet.vercel.app/)
 
+> ⚡ Please be mindful of GPT API usage if testing the live demo.
+
+## 💡 Inspiration
+
+This project was inspired by [@thearyanag](https://github.com/thearyanag)'s ideas and [this discussion](https://github.com/sendaifun/solana-agent-kit/issues/126) about Solana Agent Kit. The goal is to create a more intuitive way to interact with Solana wallets using natural language.
+
+## 🎯 Implementation Details
+
+- Currently using GPT-4o-mini for processing natural language commands (feel free to experiment with different models)
+- Using default Solana wallet provider for transaction signing
+- Future possibilities (not yet implemented):
+    - Using Privy for auto-signing transactions
+    - Generating unique wallets for each user mapped to their EOA
+- Automated features:
+    - Integrated 2 SOL airdrop for testing
+    - Real-time balance updates
+    - Transaction history tracking
+
+## ⚠️ Known Limitations
+
+- **Swap Functionality**: Currently, the swap feature is not fully functional due to Jupiter API limitations on Devnet. Contributions to fix this are welcome!
+- Running on Devnet for testing purposes.
+- Current model (GPT-4o-mini) limitations - feel free to experiment with other models like GPT-o1 or Claude 3.5 Sonnet.
+
+## ✨ Features
+
+- **Natural Language Interactions** - Send tokens, check balances, and perform actions using simple text commands
+- **Token Management** - View SOL and USDC balances in real-time
+- **Transaction History** - Track your recent transactions with detailed status updates
+- **AI-Powered Interface** - Interact with your wallet using natural language
+- **Automated Test SOL** - One-click 2 SOL airdrop for testing
+- **Secure Architecture** - Built with security best practices and proper error handling
+- **Mobile Responsive** - Fully functional on both desktop and mobile devices
+
+## 🚀 Quick Start
+
+1. **Clone the repository**
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/pegasus1134/solana-gpt-wallet.git
+cd solana-gpt-wallet
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. **Install dependencies**
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. **Set up environment variables**
+   Create a `.env.local` file in the root directory:
+```env
+NEXT_PUBLIC_OPENAI_API_KEY=your_api_key_here
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. **Run the development server**
+```bash
+npm run dev
+```
 
-## Learn More
+## 🔧 Customization
 
-To learn more about Next.js, take a look at the following resources:
+Feel free to experiment with:
+- Different GPT models (currently using GPT-4-mini)
+- Custom system prompts for better interactions
+- Alternative wallet providers
+- Additional token support
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🛠 Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Frontend**: Next.js, React, TypeScript
+- **Styling**: Tailwind CSS, Shadcn UI
+- **Blockchain**: Solana Web3.js
+- **AI Integration**: OpenAI GPT-4-mini
+- **State Management**: Zustand
 
-## Deploy on Vercel
+## 🤝 Contributing
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Contributions are welcome! Particularly interested in:
+- Fixing the swap functionality
+- Implementing Privy integration
+- Adding support for more tokens
+- Improving error handling
+- Enhancing the UI/UX
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+To contribute:
+1. Fork the repository
+2. Create a new branch
+3. Make your changes
+4. Submit a pull request
+
+## 📄 License
+
+MIT License - feel free to use this project for your own purposes
+
+## 👏 Acknowledgements
+
+- [@thearyanag](https://github.com/thearyanag) for the original idea and inspiration
+- [Solana Agent Kit](https://github.com/sendaifun/solana-agent-kit)
+- Solana and OpenAI teams for their amazing tools
+
+---
+
+Made by [pegasus1134](https://github.com/pegasus1134) | neuralway.ai

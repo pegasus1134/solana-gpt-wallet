@@ -46,6 +46,16 @@ export interface WalletCommand {
     error?: string;
 }
 
+interface SwapQuoteResult {
+    success: boolean;
+    data?: {
+        outAmount: number;
+        priceImpactPct: number;
+    };
+    error?: string;
+}
+
+
 export class GPTService {
     private openai: OpenAI;
     private connection: Connection;
@@ -134,76 +144,93 @@ export class GPTService {
 
     private async getSwapQuote(inputToken: string, outputToken: string, amount: number): Promise<SwapQuoteResult> {
         const tokenAddresses = {
-            SOL: 'So11111111111111111111111111111111111111112', // wrapped SOL on devnet
-            USDC: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU' // official devnet USDC
+            SOL: 'So11111111111111111111111111111111111111112',
+            USDC: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
         };
 
         const inputMint = tokenAddresses[inputToken as keyof typeof tokenAddresses];
         const outputMint = tokenAddresses[outputToken as keyof typeof tokenAddresses];
 
         if (!inputMint || !outputMint) {
-            return { error: 'Unsupported token pair' };
+            return {
+                success: false,
+                error: 'Unsupported token pair'
+            };
         }
 
-        let lamports = 0;
-        if (inputToken === 'SOL') {
-            lamports = Math.floor(amount * LAMPORTS_PER_SOL);
-        } else {
-            lamports = Math.floor(amount * 1_000_000); // USDC has 6 decimals
-        }
-
-        const queryParams = new URLSearchParams({
-            cluster: 'devnet',
-            inputMint,
-            outputMint,
-            amount: lamports.toString(),
-            slippageBps: '100',
-            onlyDirectRoutes: 'false'
-        });
-        const url = `https://quote-api.jup.ag/v6/quote?${queryParams.toString()}`;
-
-        console.log('Attempting swap quote with Jupiter:', url);
+        const inputAmount = inputToken === 'SOL'
+            ? Math.floor(amount * LAMPORTS_PER_SOL)
+            : Math.floor(amount * 1000000);
 
         try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                let errorMessage = 'Failed to get swap quote';
-                try {
-                    const errorData = await response.json();
-                    if (errorData?.error) {
-                        errorMessage = errorData.error;
-                    }
-                } catch {
-                    // If JSON parse fails, fallback to text
-                    const errorText = await response.text();
-                    if (errorText) errorMessage = errorText;
-                }
-                return { error: `Swap quote failed: ${errorMessage}` };
-            }
+            const queryParams = new URLSearchParams({
+                inputMint,
+                outputMint,
+                amount: inputAmount.toString(),
+                slippageBps: '50',
+                onlyDirectRoutes: 'false',
+                asLegacyTransaction: 'true',
+                useSharedAccounts: 'true',
+                cluster: 'devnet'
+            });
 
-            const quoteData = await response.json();
-            if (!quoteData?.data?.[0]) {
+            const url = `https://quote-api.jup.ag/v6/quote?${queryParams}`;
+            console.log('Requesting Jupiter quote:', {
+                inputToken,
+                outputToken,
+                amount: inputAmount,
+                url
+            });
+
+            const response = await fetch(url);
+            const text = await response.text();
+            let data;
+
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
                 return {
-                    error: 'No routes found for this swap on Devnet. Try a smaller amount or ensure enough SOL for fees.'
+                    success: false,
+                    error: `Invalid response from Jupiter: ${text}`
                 };
             }
 
-            const bestRoute = quoteData.data[0];
-            const outAmount = (outputToken === 'SOL')
+            if (!response.ok) {
+                return {
+                    success: false,
+                    error: data.error || 'Failed to get quote'
+                };
+            }
+
+            if (!data?.data?.[0]) {
+                return {
+                    success: false,
+                    error: 'No routes available. Try a smaller amount or different tokens.'
+                };
+            }
+
+            const bestRoute = data.data[0];
+            const outAmount = outputToken === 'SOL'
                 ? bestRoute.outAmount / LAMPORTS_PER_SOL
-                : bestRoute.outAmount / 1_000_000;
+                : bestRoute.outAmount / 1000000;
 
             return {
-                outAmount,
-                priceImpactPct: bestRoute.priceImpactPct
+                success: true,
+                data: {
+                    outAmount,
+                    priceImpactPct: bestRoute.priceImpactPct
+                }
             };
-        } catch (err) {
-            console.error('Error in getSwapQuote:', err);
+
+        } catch (error) {
+            console.error('Swap quote error:', error);
             return {
-                error: err instanceof Error ? err.message : String(err)
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error occurred'
             };
         }
     }
+
 
     async processUserInput(input: string, walletAddress?: string, balance?: number): Promise<WalletCommand> {
         try {
@@ -436,7 +463,7 @@ export class GPTService {
         if (this.currentTransaction.fromToken === this.currentTransaction.toToken) {
             return {
                 action: 'swap',
-                message: 'Cannot swap a token for itself. Please choose different tokens.',
+                message: 'Cannot swap a token for itself',
                 needsMoreInfo: true,
                 error: 'Invalid token pair'
             };
@@ -448,29 +475,29 @@ export class GPTService {
             typeof this.currentTransaction.toToken === 'string';
 
         if (this.currentTransaction.isComplete) {
-            try {
-                const quote = await this.getSwapQuote(
-                    this.currentTransaction.fromToken,
-                    this.currentTransaction.toToken,
-                    this.currentTransaction.amount
-                );
+            const quoteResult = await this.getSwapQuote(
+                this.currentTransaction.fromToken,
+                this.currentTransaction.toToken,
+                this.currentTransaction.amount
+            );
 
-                response.amount = this.currentTransaction.amount;
-                response.fromToken = this.currentTransaction.fromToken;
-                response.toToken = this.currentTransaction.toToken;
-                response.requiresConfirmation = true;
-                response.formattedAmount = `${this.currentTransaction.amount.toFixed(4)} ${this.currentTransaction.fromToken}`;
-                response.message = `Ready to swap ${response.formattedAmount} for approximately ${quote.outAmount.toFixed(4)} ${this.currentTransaction.toToken} (Price Impact: ${(quote.priceImpactPct).toFixed(2)}%)`;
-
-                this.currentTransaction = null;
-            } catch (error) {
-                console.error('Swap quote error:', error);
+            if (!quoteResult.success || !quoteResult.data) {
                 return {
                     action: 'swap',
-                    message: 'Failed to get swap quote. Please check your input and try again.',
-                    error: error instanceof Error ? error.message : 'Unknown error'
+                    message: quoteResult.error || 'Failed to get swap quote',
+                    needsMoreInfo: true,
+                    error: quoteResult.error
                 };
             }
+
+            response.amount = this.currentTransaction.amount;
+            response.fromToken = this.currentTransaction.fromToken;
+            response.toToken = this.currentTransaction.toToken;
+            response.requiresConfirmation = true;
+            response.formattedAmount = `${this.currentTransaction.amount.toFixed(4)} ${this.currentTransaction.fromToken}`;
+            response.message = `Ready to swap ${response.formattedAmount} for approximately ${quoteResult.data.outAmount.toFixed(4)} ${this.currentTransaction.toToken} (Price Impact: ${quoteResult.data.priceImpactPct.toFixed(2)}%)`;
+
+            this.currentTransaction = null;
         } else {
             response.needsMoreInfo = true;
             if (!response.amount) {
