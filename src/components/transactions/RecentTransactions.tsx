@@ -26,7 +26,7 @@ export const RecentTransactions = ({
                                    }: TransactionsProps) => {
     // Helper function to get explorer URL
     const getExplorerUrl = (path: string) => {
-        return `https://solscan.io${path}?cluster=devnet`;
+        return `https://solscan.io${path}?cluster=mainnet`;
     };
 
     // Format timestamp
