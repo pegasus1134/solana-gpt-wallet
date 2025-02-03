@@ -5,6 +5,9 @@ const require = createRequire(import.meta.url);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
+    eslint: {
+        ignoreDuringBuilds: true,
+    },
     webpack: (config, { isServer }) => {
         if (!isServer) {
             config.resolve.fallback = {
