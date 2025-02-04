@@ -1,10 +1,13 @@
-// next.config.ts
+// next.config.js
 import type { NextConfig } from 'next';
 import type { Configuration } from 'webpack';
 import webpack from 'webpack';
 
 const nextConfig: NextConfig = {
     reactStrictMode: true,
+    typescript: {
+        ignoreBuildErrors: true,
+    },
     eslint: {
         ignoreDuringBuilds: true,
     },

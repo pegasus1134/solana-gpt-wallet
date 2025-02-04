@@ -1,4 +1,5 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+// src/pages/api/process-command.ts
+import { NextApiRequest, NextApiResponse } from 'next';
 import { GPTService } from '@/services/gpt.service';
 import { WalletCommand } from '@/services/gpt.service';
 
@@ -7,10 +8,10 @@ interface CommandResponse {
     error?: string;
 }
 
-export default async function handler(
+const handler = async (
     req: NextApiRequest,
     res: NextApiResponse<CommandResponse>
-) {
+) => {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -38,4 +39,6 @@ export default async function handler(
             error: error instanceof Error ? error.message : 'Internal server error',
         });
     }
-}
+};
+
+export default handler;

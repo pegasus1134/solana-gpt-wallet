@@ -259,59 +259,30 @@ const WalletDashboard: React.FC = () => {
     };
 
     const executeSwap = async (command: WalletCommand) => {
-        if (!publicKey || !command.amount || !command.fromToken || !command.toToken) return;
+        if (!publicKey) {
+            setTransactionError({
+                type: 'error',
+                message: 'Wallet not connected',
+                details: 'Please connect your wallet first'
+            });
+            return;
+        }
 
         setTransactionInProgress(true);
         try {
-            console.log('Preparing swap with params:', {
-                fromToken: command.fromToken,
-                toToken: command.toToken,
-                amount: command.amount,
-                walletAddress: publicKey.toString()
+            // Temporarily disable swap functionality
+            setTransactionError({
+                type: 'warning',
+                message: 'Swaps temporarily unavailable',
+                details: 'This feature will be available soon'
             });
 
-            // Request the unsigned swap transaction from your API.
-            const response = await fetch('/api/execute-swap', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    fromToken: command.fromToken,
-                    toToken: command.toToken,
-                    amount: command.amount,
-                    walletAddress: publicKey.toString()
-                })
-            });
-
-            const result = await response.json();
-
-            // Instead of throwing an error, check if result.error is set.
-            if (result.error) {
-                setTransactionError({
-                    type: 'error',
-                    message: result.error,
-                    details: ''
-                });
-                return; // Exit early so that no further processing occurs.
-            }
-
-            // Deserialize the unsigned transaction.
-            const transaction = Transaction.from(
-                Buffer.from(result.swapTransaction, 'base64')
-            );
-
-            // Send the transaction using the user's wallet adapter.
-            const signature = await sendTransaction(transaction, customConnection);
-
-            setResponse(`Swap executed successfully! Signature: ${signature}`);
-            await sleep(1000);
-            await updateBalances();
-            await fetchRecentTransactions();
-        } catch (error: any) {
+        } catch (error) {
             console.error('Swap execution error:', error);
             setTransactionError({
                 type: 'error',
                 message: 'Swap failed',
-                details: error.message || 'Unknown error occurred'
+                details: error instanceof Error ? error.message : 'Unknown error'
             });
         } finally {
             setTransactionInProgress(false);
@@ -321,32 +292,36 @@ const WalletDashboard: React.FC = () => {
 
 
     const processCommand = async (): Promise<WalletCommand> => {
-        const payload = {
-            input,
-            publicKey: publicKey.toString(),
-            balance,
-        };
-
-        const res = await fetch('/api/process-command', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-
-        if (!res.ok) {
-            const errorText = await res.text();
-            throw new Error(`API error: ${res.status} ${errorText}`);
+        if (!publicKey) {
+            throw new Error("Wallet not connected. Please connect your wallet first.");
         }
 
-        const contentType = res.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            const text = await res.text();
-            throw new Error(`Expected JSON but got: ${text}`);
-        }
+        try {
+            const response = await fetch('/api/process-command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    input,
+                    publicKey: publicKey.toString(),
+                    balance: balance
+                })
+            });
 
-        const data = await res.json();
-        return data.result;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to process command');
+            }
+
+            const data = await response.json();
+            return data.result;
+        } catch (error) {
+            console.error('Error processing command:', error);
+            throw new Error('Failed to process command. Please try again.');
+        }
     };
+
 
     const onConfirmTransaction = () => {
         if (pendingTransaction) {
@@ -361,27 +336,18 @@ const WalletDashboard: React.FC = () => {
             return;
         }
 
-        const payload = {
-            input,
-            publicKey: publicKey.toString(),
-            balance,
-        };
-
         setProcessing(true);
         setIsTyping(true);
         setTransactionError(null);
 
         try {
             const gptResponse = await processCommand();
+
             if (gptResponse.action === 'send') {
                 if (gptResponse.amount && gptResponse.toAddress) {
                     if (validateTransaction(gptResponse.amount)) {
                         setPendingTransaction(gptResponse);
                     }
-                }
-            } else if (gptResponse.action === 'swap') {
-                if (gptResponse.amount && gptResponse.fromToken && gptResponse.toToken) {
-                    setPendingTransaction(gptResponse);
                 }
             } else if (gptResponse.action === 'check_balance') {
                 await updateBalances();
@@ -390,11 +356,15 @@ const WalletDashboard: React.FC = () => {
             }
 
             if (gptResponse.error) {
-                setTransactionError({ type: 'warning', message: gptResponse.error });
+                setTransactionError({
+                    type: 'warning',
+                    message: gptResponse.error
+                });
             }
+
             setResponse(gptResponse.message);
         } catch (error) {
-            console.error('Error processing command:', error);
+            console.error('Error in handleSubmit:', error);
             setResponse('Sorry, I encountered an error processing your request.');
             setTransactionError({
                 type: 'error',
