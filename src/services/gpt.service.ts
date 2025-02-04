@@ -1,7 +1,9 @@
 // gpt.service.ts
 import OpenAI from 'openai';
-import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, Connection } from '@solana/web3.js';
+import { createJupiterApiClient } from '@jup-ag/api';
 import { SolanaAgentKit } from 'solana-agent-kit';
+
 import { Buffer as BufferPolyfill } from 'buffer';
 
 // Polyfill Buffer for browser environments
@@ -56,7 +58,7 @@ export interface WalletCommand {
 
 export class GPTService {
     private openai: OpenAI;
-    public agent: SolanaAgentKit;
+    public agent: SolanaAgentKit | null;
     private conversationContext: any[] = [];
     private currentTransaction: {
         amount?: number;
@@ -67,14 +69,33 @@ export class GPTService {
         toToken?: string;
     } | null = null;
 
-    constructor(apiKey: string, rpcEndpoint?: string, agentKey?: string) {
+    constructor(apiKey: string, rpcEndpoint?: string, agentKey?: string | null) {
         this.openai = new OpenAI({
             apiKey,
             dangerouslyAllowBrowser: true
         });
 
         const endpoint = rpcEndpoint || process.env.NEXT_PUBLIC_SOLANA_RPC_URL;
-        this.agent = new SolanaAgentKit(agentKey || '', endpoint);
+
+        // Only initialize agent if agentKey is provided
+        if (agentKey) {
+            const jupiterConfig = {
+                config: {
+                    JUPITER_FEE_BPS: 5,  // 0.05% fee
+                    JUPITER_TIMEOUT_MS: 30000,  // 30 seconds
+                    JUPITER_API_VERSION: "v6",
+                    JUPITER_PLATFORM_FEE_BPS: 0,  // No platform fee
+                    JUPITER_ROUTING_API_URL: "https://quote-api.jup.ag/v6",
+                    JUPITER_SWAP_API_URL: "https://quote-api.jup.ag/v6",
+                    JUPITER_PRICE_API_URL: "https://price.jup.ag/v4"
+                }
+            };
+
+            this.agent = new SolanaAgentKit(agentKey, endpoint, jupiterConfig);
+        } else {
+            this.agent = null;
+        }
+
         this.initializeContext();
     }
 
@@ -140,7 +161,86 @@ export class GPTService {
         return { isValid: true };
     }
 
-    // ── CORE NATURAL LANGUAGE PROCESSING CODE (unchanged) ──
+    async prepareSwapTransactionUnsigned(
+        command: WalletCommand & { walletAddress: string; connection: Connection }
+    ): Promise<Transaction> {
+        // Configure the Jupiter API client.
+        // Do not include a private key so that the swap transaction remains unsigned.
+        const config = {
+            // Optionally, set a custom base URL if you host your own Jupiter API
+            basePath: process.env.JUPITER_API_BASE_PATH || undefined,
+            // Do not include PRIVATE_KEY in the config.
+        };
+        const jupiterApi = createJupiterApiClient(config);
+
+        // Map the token symbols to their mint addresses.
+        const tokenMints: { [key: string]: string } = {
+            SOL: 'So11111111111111111111111111111111111111112',
+            USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+        };
+
+        const sourceToken = command.fromToken?.toUpperCase();
+        const targetToken = command.toToken?.toUpperCase();
+        if (!sourceToken || !targetToken) {
+            throw new Error('Missing token parameters');
+        }
+        const sourceMint = tokenMints[sourceToken];
+        const targetMint = tokenMints[targetToken];
+        if (!sourceMint || !targetMint) {
+            throw new Error('Unsupported token pair');
+        }
+
+        // Convert the amount to lamports (assuming SOL – adjust if swapping tokens with different decimals).
+        const amountLamports = Math.round(command.amount * LAMPORTS_PER_SOL).toString();
+
+        // STEP 1: Get swap quotes
+        const quoteResponse = await jupiterApi.quoteGet({
+            inputMint: sourceMint,
+            outputMint: targetMint,
+            amount: amountLamports,
+            slippage: 300, // slippage in basis points (300 = 3%)
+            asLegacyTransaction: true // request a legacy transaction format if needed
+        });
+
+        if (!quoteResponse.data || quoteResponse.data.length === 0) {
+            throw new Error('No swap routes found');
+        }
+        // Choose the best (first) quote.
+        const bestQuote = quoteResponse.data[0];
+
+        // STEP 2: Build the swap transaction using the best quote.
+        // By passing the user's public key, the transaction will be built for the user.
+        const swapResponse = await jupiterApi.swap({
+            quoteResponse: bestQuote,
+            userPublicKey: command.walletAddress, // can be a string or PublicKey
+            asLegacyTransaction: true // ensure the transaction is returned in legacy format (unsigned)
+        });
+
+        // Assume that swapResponse.swapTransaction is returned as a base64 string.
+        if (!swapResponse.swapTransaction) {
+            throw new Error('Swap transaction was not returned');
+        }
+        // Deserialize the unsigned transaction.
+        const tx = Transaction.from(Buffer.from(swapResponse.swapTransaction, 'base64'));
+        return tx;
+    }
+
+    async buildSwapTransaction(
+        command: WalletCommand & { walletAddress: string; connection: Connection }
+    ): Promise<string> {
+        try {
+            const tx = await this.prepareSwapTransactionUnsigned({
+                ...command,
+                connection: new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL || '')
+            });
+            // Serialize the transaction without signatures so that the user's wallet can sign it.
+            const serializedTx = tx.serialize({ requireAllSignatures: false });
+            return Buffer.from(serializedTx).toString('base64');
+        } catch (error) {
+            console.error('Swap preparation error:', error);
+            throw new Error(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
 
     async processUserInput(input: string, walletAddress?: string, balance?: number): Promise<WalletCommand> {
         try {
@@ -352,6 +452,19 @@ export class GPTService {
             };
         }
 
+        const supportedTokens = ['SOL', 'USDC'];
+        const fromToken = this.currentTransaction.fromToken;
+        const toToken = this.currentTransaction.toToken;
+
+        if (!supportedTokens.includes(fromToken) || !supportedTokens.includes(toToken)) {
+            return {
+                action: 'swap',
+                message: 'Currently only SOL/USDC swaps are supported.',
+                needsMoreInfo: true,
+                error: 'Unsupported token pair'
+            };
+        }
+
         if (response.amount) {
             if (this.currentTransaction.fromToken === 'SOL') {
                 const amountValidation = this.validateAmount(response.amount, balance);
@@ -367,31 +480,22 @@ export class GPTService {
             this.currentTransaction.amount = response.amount;
         }
 
-        if (response.fromToken) this.currentTransaction.fromToken = response.fromToken.toUpperCase();
-        if (response.toToken) this.currentTransaction.toToken = response.toToken.toUpperCase();
-
-        if (this.currentTransaction.fromToken === this.currentTransaction.toToken) {
-            return {
-                action: 'swap',
-                message: 'Cannot swap a token for itself',
-                needsMoreInfo: true,
-                error: 'Invalid token pair'
-            };
-        }
-
         this.currentTransaction.isComplete =
             typeof this.currentTransaction.amount === 'number' &&
-            typeof this.currentTransaction.fromToken === 'string' &&
-            typeof this.currentTransaction.toToken === 'string';
+            this.currentTransaction.fromToken &&
+            this.currentTransaction.toToken;
 
         if (this.currentTransaction.isComplete) {
-            // Instead of fetching a Jupiter quote manually, we now let the agent handle the swap.
-            response.amount = this.currentTransaction.amount;
-            response.fromToken = this.currentTransaction.fromToken;
-            response.toToken = this.currentTransaction.toToken;
+            const amount = this.currentTransaction.amount;
+            const fromToken = this.currentTransaction.fromToken;
+            const toToken = this.currentTransaction.toToken;
+
+            response.amount = amount;
+            response.fromToken = fromToken;
+            response.toToken = toToken;
             response.requiresConfirmation = true;
-            response.formattedAmount = `${this.currentTransaction.amount.toFixed(4)} ${this.currentTransaction.fromToken}`;
-            response.message = `Ready to swap ${response.formattedAmount} for ${response.toToken} (price and slippage will be determined by the Agent).`;
+            response.formattedAmount = `${amount.toFixed(4)} ${fromToken}`;
+            response.message = `Ready to swap ${response.formattedAmount} to ${toToken}. Please confirm the transaction.`;
             this.currentTransaction = null;
         } else {
             response.needsMoreInfo = true;
@@ -415,15 +519,33 @@ export class GPTService {
         }
 
         try {
-            const balanceLamports = await this.agent.connection.getBalance(
-                new PublicKey(walletAddress)
+            const publicKey = new PublicKey(walletAddress);
+            const connection = this.agent?.connection || new Connection(
+                process.env.NEXT_PUBLIC_SOLANA_RPC_URL || '',
+                { commitment: 'confirmed' }
             );
+
+            const [balanceLamports, usdcAccounts] = await Promise.all([
+                connection.getBalance(publicKey),
+                connection.getParsedTokenAccountsByOwner(publicKey, {
+                    mint: new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') // USDC mint
+                })
+            ]);
+
+            const solBalance = (balanceLamports / LAMPORTS_PER_SOL).toFixed(4);
+            let usdcBalance = '0.00';
+
+            if (usdcAccounts.value.length > 0) {
+                usdcBalance = usdcAccounts.value[0].account.data.parsed.info.tokenAmount.uiAmount.toFixed(2);
+            }
+
             return {
                 action: 'check_balance',
-                message: `Your balance is ${(balanceLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL`,
-                formattedAmount: `${(balanceLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL`
+                message: `Your balances:\n${solBalance} SOL\n${usdcBalance} USDC`,
+                formattedAmount: `${solBalance} SOL, ${usdcBalance} USDC`
             };
         } catch (error) {
+            console.error('Balance fetch error:', error);
             return {
                 action: 'check_balance',
                 message: 'Failed to fetch balance. Please try again.',
@@ -442,6 +564,10 @@ export class GPTService {
         }
 
         try {
+            if (!this.agent) {
+                throw new Error('Agent not initialized');
+            }
+
             const signatures = await this.agent.connection.getSignaturesForAddress(
                 new PublicKey(walletAddress),
                 { limit: 5 }
@@ -468,11 +594,13 @@ export class GPTService {
         }
     }
 
-    // ── NEW AGENT KIT METHODS FOR EXECUTING ACTIONS ──
-
     async createSendTransaction(fromPubkey: PublicKey, command: WalletCommand): Promise<Transaction> {
         if (!command.toAddress || !command.amount) {
             throw new Error("Missing parameters for send");
+        }
+
+        if (!this.agent) {
+            throw new Error("Agent not initialized");
         }
 
         try {
@@ -489,6 +617,10 @@ export class GPTService {
     }
 
     async executeSwap(command: WalletCommand): Promise<{ signature: string; message: string }> {
+        if (!this.agent) {
+            throw new Error("Agent not initialized");
+        }
+
         if (!command.amount || !command.fromToken || !command.toToken) {
             throw new Error("Missing parameters for swap");
         }
@@ -508,6 +640,13 @@ export class GPTService {
         }
 
         try {
+            // Execute the trade
+            console.log('Executing trade with params:', {
+                targetMint,
+                amount: command.amount,
+                sourceMint
+            });
+
             const signature = await this.agent.trade(
                 new PublicKey(targetMint),
                 command.amount,
@@ -515,16 +654,23 @@ export class GPTService {
                 300 // 3% slippage
             );
 
+            console.log('Trade completed with signature:', signature);
+
             return {
                 signature,
                 message: `Successfully swapped ${command.amount.toFixed(4)} ${sourceToken} to ${targetToken}`
             };
         } catch (error) {
-            throw new Error(error instanceof Error ? error.message : 'Swap failed');
+            console.error('Trade error:', error);
+            throw new Error(`Swap failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 
     async checkBalance(walletAddress: string): Promise<{ balance: number, message: string }> {
+        if (!this.agent) {
+            throw new Error("Agent not initialized");
+        }
+
         try {
             const balanceLamports = await this.agent.connection.getBalance(new PublicKey(walletAddress));
             const balance = balanceLamports / LAMPORTS_PER_SOL;

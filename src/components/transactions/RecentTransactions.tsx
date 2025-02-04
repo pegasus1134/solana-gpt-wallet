@@ -30,10 +30,11 @@ export const RecentTransactions = ({
     };
 
     // Format timestamp
-    const formatDate = (timestamp: number) => {
-        if (!timestamp) return 'Pending';
+    const formatDate = (timestamp?: number) => {
+        if (timestamp === undefined) return 'Pending';
         return new Date(timestamp * 1000).toLocaleString();
     };
+
 
     // Format address
     const formatAddress = (address: string) => {

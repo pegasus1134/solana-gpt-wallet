@@ -6,8 +6,10 @@ import {
     SystemProgram,
     PublicKey,
     Connection,
+    Commitment,
 } from '@solana/web3.js';
 import { useWalletStore } from '@/stores/useWalletStore';
+import { updateAllBalances, validateBalance } from '@/utils/balance-utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ClientWalletButton } from '@/components/ClientWalletButton';
@@ -29,31 +31,32 @@ import {
     X,
     AlertOctagon,
     AlertTriangle,
+    Pause,
 } from 'lucide-react';
 
-// Use your RPC endpoint (set via NEXT_PUBLIC_SOLANA_RPC_URL)
-const FREE_RPC_URL =
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+import TransactionConfirmation from '@/components/TransacationConfirmation';
+
+// Constants
+const FREE_RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
     'https://quick-snowy-spring.solana-mainnet.quiknode.pro/b8555444cea75763a432668664ab36f1d6dd64e0';
-// USDC mint address on mainnet
-const MAINNET_USDC_MINT = new PublicKey(
-    'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
-);
+
+const MAINNET_USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 
 const connectionConfig = {
-    commitment: 'confirmed',
+    commitment: 'confirmed' as Commitment,
     confirmTransactionInitialTimeout: 60000,
     disableRetryOnRateLimit: false,
-    fetch: (url: string, options: any) => {
-        return fetch(url, {
-            ...options,
+    fetch: (input: RequestInfo | URL, init?: RequestInit) => {
+        return fetch(input, {
+            ...init,
             headers: {
-                ...options.headers,
+                ...init?.headers,
                 'Origin': 'https://explorer.solana.com',
             },
         });
     },
 };
+
 
 type TransactionError = {
     type: 'error' | 'warning';
@@ -61,7 +64,6 @@ type TransactionError = {
     details?: string;
 };
 
-// This type represents the command returned by the API route.
 export interface WalletCommand {
     action: 'send' | 'receive' | 'check_balance' | 'ask_address' | 'confirm_transaction' | 'show_history' | 'swap';
     amount?: number;
@@ -73,9 +75,7 @@ export interface WalletCommand {
     needsMoreInfo?: boolean;
     formattedAmount?: string;
     error?: string;
-};
-
-import TransactionConfirmation from '@/components/TransacationConfirmation';
+}
 
 const WalletDashboard: React.FC = () => {
     const customConnection = useMemo(
@@ -85,7 +85,7 @@ const WalletDashboard: React.FC = () => {
     const { publicKey, sendTransaction } = useWallet();
     const { balance, setBalance, setError } = useWalletStore();
 
-    // Local state variables.
+    // State declarations
     const [input, setInput] = useState('');
     const [processing, setProcessing] = useState(false);
     const [response, setResponse] = useState('');
@@ -98,23 +98,40 @@ const WalletDashboard: React.FC = () => {
     const [transactionInProgress, setTransactionInProgress] = useState(false);
     const [showMainnetWarning, setShowMainnetWarning] = useState(true);
     const [usdcBalance, setUsdcBalance] = useState<number>(0);
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
 
-    // Clear errors after 5 seconds.
-    useEffect(() => {
-        let timeoutId: NodeJS.Timeout;
-        if (transactionError) {
-            timeoutId = setTimeout(() => setTransactionError(null), 5000);
+    const fetchRecentTransactions = useCallback(async () => {
+        if (!publicKey || isLoadingTransactions) return;
+
+        setIsLoadingTransactions(true);
+        try {
+            const signatures = await customConnection.getSignaturesForAddress(
+                publicKey,
+                { limit: 5 },
+                'confirmed'
+            );
+
+            // Only update if we have new transactions
+            const currentSigs = recentTransactions.map(tx => tx.signature);
+            const newSigs = signatures.map(tx => tx.signature);
+
+            if (JSON.stringify(currentSigs) !== JSON.stringify(newSigs)) {
+                setRecentTransactions(signatures);
+            }
+        } catch (error) {
+            console.error('Error fetching transactions:', error);
+            setResponse('Failed to fetch recent transactions.');
+            if (recentTransactions.length === 0) {
+                setRecentTransactions([]);
+            }
+        } finally {
+            setIsLoadingTransactions(false);
         }
-        return () => {
-            if (timeoutId) clearTimeout(timeoutId);
-        };
-    }, [transactionError]);
+    }, [publicKey, customConnection, isLoadingTransactions, recentTransactions]);
 
-    // Update balances and transactions on wallet connection changes.
     useEffect(() => {
         if (publicKey) {
-            updateBalance();
-            updateUsdcBalance();
+            updateBalances();
             fetchRecentTransactions();
             setShowBalance(true);
         } else {
@@ -127,76 +144,182 @@ const WalletDashboard: React.FC = () => {
         }
     }, [publicKey]);
 
-    const updateBalance = async () => {
-        if (!publicKey) return;
-        try {
-            const balanceLamports = await customConnection.getBalance(publicKey);
-            setBalance(balanceLamports / LAMPORTS_PER_SOL);
-        } catch (error) {
-            console.error('Error fetching balance:', error);
-            setError('Failed to fetch balance');
-            setBalance(0);
-        }
-    };
 
-    const updateUsdcBalance = async () => {
-        if (!publicKey) return;
-        try {
-            const tokenAccounts = await customConnection.getParsedTokenAccountsByOwner(publicKey, {
-                mint: MAINNET_USDC_MINT,
+    const updateBalances = useCallback(async () => {
+        if (!publicKey || !customConnection) return;
+
+        const success = await updateAllBalances(
+            customConnection,
+            publicKey,
+            setBalance,
+            setUsdcBalance
+        );
+
+        if (!success) {
+            setTransactionError({
+                type: 'warning',
+                message: 'Failed to update balances',
+                details: 'Please try again or refresh the page'
             });
-            if (tokenAccounts.value.length === 0) {
-                setUsdcBalance(0);
-                return;
-            }
-            const account = tokenAccounts.value[0];
-            const amount = account.account.data.parsed.info.tokenAmount.uiAmount;
-            setUsdcBalance(amount || 0);
-        } catch (error) {
-            console.error('Error fetching USDC balance:', error);
-            setUsdcBalance(0);
         }
-    };
+    }, [publicKey, customConnection, setBalance]);
 
-    const fetchRecentTransactions = async () => {
-        if (!publicKey || isLoadingTransactions) return;
-        setIsLoadingTransactions(true);
-        try {
-            const signatures = await customConnection.getSignaturesForAddress(publicKey, { limit: 5 });
-            setRecentTransactions(signatures);
-        } catch (error) {
-            console.error('Error fetching transactions:', error);
-            setResponse('Failed to fetch recent transactions.');
-            setRecentTransactions([]);
-        } finally {
-            setIsLoadingTransactions(false);
+    const handleRefresh = useCallback(async () => {
+        await updateBalances();
+        await fetchRecentTransactions();
+    }, [updateBalances, fetchRecentTransactions]);
+
+    useEffect(() => {
+        if (!publicKey || !autoRefreshEnabled) return;
+
+        const intervalId = setInterval(() => {
+            updateBalances();
+            fetchRecentTransactions();
+        }, 10000); // Refresh every 10 seconds
+
+        return () => clearInterval(intervalId);
+    }, [publicKey, autoRefreshEnabled, updateBalances, fetchRecentTransactions]);
+
+    const handleManualRefresh = useCallback(async () => {
+        if (publicKey) {
+            await updateBalances();
+            await fetchRecentTransactions();
         }
-    };
+    }, [publicKey, updateBalances, fetchRecentTransactions]);
 
+
+    // Clear errors after 5 seconds
+    useEffect(() => {
+        let timeoutId: NodeJS.Timeout;
+        if (transactionError) {
+            timeoutId = setTimeout(() => setTransactionError(null), 5000);
+        }
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+    }, [transactionError]);
+
+    // Validate transaction amounts
     const validateTransaction = useCallback(
-        (amount: number): boolean => {
-            if (amount <= 0) {
+        (amount: number, token: 'SOL' | 'USDC' = 'SOL'): boolean => {
+            const balanceToCheck = token === 'SOL' ? balance : usdcBalance;
+            const validation = validateBalance(amount, balanceToCheck, token);
+
+            if (!validation.isValid && validation.error) {
                 setTransactionError({
                     type: 'error',
-                    message: 'Invalid amount',
-                    details: 'Amount must be greater than 0',
-                });
-                return false;
-            }
-            if (amount > balance) {
-                setTransactionError({
-                    type: 'error',
-                    message: 'Insufficient balance',
-                    details: `You need ${amount} SOL but only have ${balance.toFixed(4)} SOL`,
+                    message: 'Invalid transaction',
+                    details: validation.error,
                 });
                 return false;
             }
             return true;
         },
-        [balance]
+        [balance, usdcBalance]
     );
 
-    // Process natural language commands via the API route.
+    const executeTransaction = async (command: WalletCommand) => {
+        if (!publicKey || !command.toAddress || !command.amount) return;
+        if (!validateTransaction(command.amount)) {
+            setPendingTransaction(null);
+            return;
+        }
+        setTransactionInProgress(true);
+        try {
+            const toPublicKey = new PublicKey(command.toAddress);
+            if (toPublicKey.equals(publicKey)) {
+                throw new Error('Cannot send SOL to your own address');
+            }
+            const transaction = new Transaction().add(
+                SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: toPublicKey,
+                    lamports: Math.floor(command.amount * LAMPORTS_PER_SOL),
+                })
+            );
+            const latestBlockhash = await customConnection.getLatestBlockhash();
+            transaction.recentBlockhash = latestBlockhash.blockhash;
+            transaction.feePayer = publicKey;
+            const signature = await sendTransaction(transaction, customConnection);
+            setResponse(`Transaction sent! Signature: ${signature}`);
+            await sleep(1000);
+            await updateBalances();
+            await fetchRecentTransactions();
+        } catch (error: any) {
+            const errorResult = handleSolanaError(error);
+            setTransactionError({
+                type: 'error',
+                message: 'Transaction failed',
+                details: errorResult.message,
+            });
+        } finally {
+            setTransactionInProgress(false);
+            setPendingTransaction(null);
+        }
+    };
+
+    const executeSwap = async (command: WalletCommand) => {
+        if (!publicKey || !command.amount || !command.fromToken || !command.toToken) return;
+
+        setTransactionInProgress(true);
+        try {
+            console.log('Preparing swap with params:', {
+                fromToken: command.fromToken,
+                toToken: command.toToken,
+                amount: command.amount,
+                walletAddress: publicKey.toString()
+            });
+
+            // Request the unsigned swap transaction from your API.
+            const response = await fetch('/api/execute-swap', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fromToken: command.fromToken,
+                    toToken: command.toToken,
+                    amount: command.amount,
+                    walletAddress: publicKey.toString()
+                })
+            });
+
+            const result = await response.json();
+
+            // Instead of throwing an error, check if result.error is set.
+            if (result.error) {
+                setTransactionError({
+                    type: 'error',
+                    message: result.error,
+                    details: ''
+                });
+                return; // Exit early so that no further processing occurs.
+            }
+
+            // Deserialize the unsigned transaction.
+            const transaction = Transaction.from(
+                Buffer.from(result.swapTransaction, 'base64')
+            );
+
+            // Send the transaction using the user's wallet adapter.
+            const signature = await sendTransaction(transaction, customConnection);
+
+            setResponse(`Swap executed successfully! Signature: ${signature}`);
+            await sleep(1000);
+            await updateBalances();
+            await fetchRecentTransactions();
+        } catch (error: any) {
+            console.error('Swap execution error:', error);
+            setTransactionError({
+                type: 'error',
+                message: 'Swap failed',
+                details: error.message || 'Unknown error occurred'
+            });
+        } finally {
+            setTransactionInProgress(false);
+            setPendingTransaction(null);
+        }
+    };
+
+
     const processCommand = async (): Promise<WalletCommand> => {
         const payload = {
             input,
@@ -225,48 +348,6 @@ const WalletDashboard: React.FC = () => {
         return data.result;
     };
 
-    // Build and send a transfer transaction using the connected wallet.
-    const executeTransaction = async (command: WalletCommand) => {
-        if (!publicKey || !command.toAddress || !command.amount) return;
-        if (!validateTransaction(command.amount)) {
-            setPendingTransaction(null);
-            return;
-        }
-        setTransactionInProgress(true);
-        try {
-            const toPublicKey = new PublicKey(command.toAddress);
-            if (toPublicKey.equals(publicKey)) {
-                throw new Error('Cannot send SOL to your own address');
-            }
-            const transaction = new Transaction().add(
-                SystemProgram.transfer({
-                    fromPubkey: publicKey,
-                    toPubkey: toPublicKey,
-                    lamports: Math.floor(command.amount * LAMPORTS_PER_SOL),
-                })
-            );
-            const latestBlockhash = await customConnection.getLatestBlockhash();
-            transaction.recentBlockhash = latestBlockhash.blockhash;
-            transaction.feePayer = publicKey;
-            const signature = await sendTransaction(transaction, customConnection);
-            setResponse(`Transaction sent! Signature: ${signature}`);
-            await sleep(1000);
-            await updateBalance();
-            await fetchRecentTransactions();
-        } catch (error: any) {
-            const errorResult = handleSolanaError(error);
-            setTransactionError({
-                type: 'error',
-                message: 'Transaction failed',
-                details: errorResult.message,
-            });
-        } finally {
-            setTransactionInProgress(false);
-            setPendingTransaction(null);
-        }
-    };
-
-    // When the user confirms a pending "send" transaction.
     const onConfirmTransaction = () => {
         if (pendingTransaction) {
             executeTransaction(pendingTransaction);
@@ -275,7 +356,16 @@ const WalletDashboard: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!input.trim() || !publicKey) return;
+        if (!input.trim() || !publicKey) {
+            setResponse("Please connect your wallet first.");
+            return;
+        }
+
+        const payload = {
+            input,
+            publicKey: publicKey.toString(),
+            balance,
+        };
 
         setProcessing(true);
         setIsTyping(true);
@@ -283,19 +373,22 @@ const WalletDashboard: React.FC = () => {
 
         try {
             const gptResponse = await processCommand();
-            // For simplicity, we only handle "send" commands.
             if (gptResponse.action === 'send') {
                 if (gptResponse.amount && gptResponse.toAddress) {
                     if (validateTransaction(gptResponse.amount)) {
                         setPendingTransaction(gptResponse);
                     }
                 }
+            } else if (gptResponse.action === 'swap') {
+                if (gptResponse.amount && gptResponse.fromToken && gptResponse.toToken) {
+                    setPendingTransaction(gptResponse);
+                }
             } else if (gptResponse.action === 'check_balance') {
-                await updateBalance();
-                await updateUsdcBalance();
+                await updateBalances();
             } else if (gptResponse.action === 'show_history') {
                 await fetchRecentTransactions();
             }
+
             if (gptResponse.error) {
                 setTransactionError({ type: 'warning', message: gptResponse.error });
             }
@@ -306,7 +399,7 @@ const WalletDashboard: React.FC = () => {
             setTransactionError({
                 type: 'error',
                 message: 'Processing Error',
-                details: error instanceof Error ? error.message : 'Unknown error',
+                details: error instanceof Error ? error.message : 'Unknown error'
             });
         } finally {
             setIsTyping(false);
@@ -377,6 +470,7 @@ const WalletDashboard: React.FC = () => {
                         </div>
                         <ClientWalletButton />
                     </div>
+
                     {showMainnetWarning && (
                         <div className="mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
                             <div className="flex items-center gap-2">
@@ -397,14 +491,11 @@ const WalletDashboard: React.FC = () => {
                             </div>
                         </div>
                     )}
+
                     {transactionError && (
-                        <div
-                            className={`mb-4 p-4 rounded-lg border ${
-                                transactionError.type === 'error'
-                                    ? 'bg-red-500/10 border-red-500/50 text-red-400'
-                                    : 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'
-                            }`}
-                        >
+                        <div className={`mb-4 p-4 rounded-lg border ${transactionError.type === 'error'
+                            ? 'bg-red-500/10 border-red-500/50 text-red-400'
+                            : 'bg-yellow-500/10 border-yellow-500/50 text-yellow-400'}`}>
                             <div className="flex items-start gap-3">
                                 <AlertOctagon className="w-5 h-5 mt-0.5" />
                                 <div>
@@ -416,6 +507,8 @@ const WalletDashboard: React.FC = () => {
                             </div>
                         </div>
                     )}
+
+
                     <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-black to-gray-900 p-8 mb-8">
                         <div className="absolute inset-0 bg-grid-white/10 pointer-events-none" />
                         <div className={`transition-all duration-1000 transform ${showBalance ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
@@ -423,17 +516,28 @@ const WalletDashboard: React.FC = () => {
                                 <div className="flex-1">
                                     <div className="flex justify-between items-center mb-6">
                                         <p className="text-gray-400">Wallet Balance</p>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => {
-                                                updateBalance();
-                                                updateUsdcBalance();
-                                            }}
-                                            className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
-                                        >
-                                            <RefreshCcw className="w-4 h-4" />
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                                className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
+                                            >
+                                                {autoRefreshEnabled ? (
+                                                    <RefreshCcw className="w-4 h-4" />
+                                                ) : (
+                                                    <Pause className="w-4 h-4" />
+                                                )}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={handleRefresh}
+                                                className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20"
+                                            >
+                                                <RefreshCcw className="w-4 h-4" />
+                                            </Button>
+                                        </div>
                                     </div>
                                     <div className="grid gap-4">
                                         <div className="p-4 rounded-lg bg-black/40 border border-gray-800/50">
@@ -567,14 +671,14 @@ const WalletDashboard: React.FC = () => {
                                             <p>
                                                 From:{' '}
                                                 <span className="text-white">
-                          {pendingTransaction.formattedAmount}
+                            {pendingTransaction.formattedAmount}
                         </span>{' '}
                                                 {pendingTransaction.fromToken}
                                             </p>
                                             <p>
                                                 To:{' '}
                                                 <span className="text-white">
-                          {pendingTransaction.toToken}
+                            {pendingTransaction.toToken}
                         </span>
                                             </p>
                                             <p className="text-yellow-500/80 text-xs mt-2">
@@ -583,11 +687,15 @@ const WalletDashboard: React.FC = () => {
                                         </div>
                                         <div className="flex gap-2 mt-4">
                                             <Button
-                                                onClick={() => {}}
+                                                onClick={() => executeSwap(pendingTransaction)}
                                                 disabled={transactionInProgress}
                                                 className="bg-green-500/20 hover:bg-green-500/30 text-green-400"
                                             >
-                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                {transactionInProgress ? (
+                                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                                ) : (
+                                                    <Check className="w-4 h-4 mr-2" />
+                                                )}
                                                 Confirm Swap
                                             </Button>
                                             <Button
